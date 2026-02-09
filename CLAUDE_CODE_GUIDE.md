@@ -264,6 +264,10 @@ Use Fireflies summary fields first. Ambiguous → Claude Haiku on first 500 word
 | Claude API rate limits | 1-2s delay between calls |
 | pgvector wrong operator | Use `<=>` (cosine), not `<->` (L2) |
 | Embedding dimension mismatch | vector(1536) for OpenAI-compatible; check actual model output |
+| LLM extraction returns null fields | Always normalize with fallback defaults; emails from LLM are often null |
+| Team member emails from LLM | Don't rely on LLM for emails; extract from Fireflies attendee data instead |
+| Fireflies transcript_text in rawJson | Stored as `rawJson.transcript_text` (joined sentences) during pull |
+| Classification is aggressive toward sales_call | 114/116 classified as sales_call; rule-based classifier has low threshold |
 
 ---
 
@@ -276,8 +280,11 @@ npx tsx src/scripts/debug-db.ts
 # Re-pull Fireflies data
 npx tsx src/scripts/pull-fireflies.ts
 
-# Re-process calls through extraction
+# Re-process calls through extraction (skips already-processed via processed_at)
 npx tsx src/scripts/process-calls.ts
+
+# Repair team member links (uses Fireflies attendee emails, not LLM output)
+npx tsx src/scripts/repair-team-members.ts
 
 # Regenerate embeddings
 npx tsx src/scripts/generate-embeddings.ts
@@ -285,6 +292,23 @@ npx tsx src/scripts/generate-embeddings.ts
 # Start dev server
 npm run dev
 ```
+
+---
+
+## Phase 2 Results (Classification + Extraction)
+
+- **116 raw meetings** processed (all from Fireflies)
+- **114 classified as sales_call**, 2 as other, 0 partner/internal
+- **113 extracted** (1 skipped due to short transcript)
+- **0 extraction errors** -- Claude Haiku 4.5 was 100% reliable for JSON extraction
+- **87 unique companies** identified across all calls
+- **22 Sherlock team members** linked via Fireflies attendee emails
+- **149 prospect contacts** extracted from transcripts
+- **187 objections** mapped to canonical types (budget_timing most common at 45)
+- **573 follow-up actions**, 584 prospect questions, 475 key quotes
+- Extraction uses Claude Haiku 4.5 (`claude-haiku-4-5-20251001`) for both classification fallback and full extraction
+- Team member linking uses Fireflies `meeting_attendees` email data (not LLM output)
+- Idempotency: `processed_at` timestamp on `raw_meetings` prevents re-processing
 
 ---
 
